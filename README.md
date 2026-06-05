@@ -6,7 +6,8 @@ A Spring Boot REST API that calculates customer reward points based on their tra
 
 ## Features
 
-* Calculate reward points for a customer
+* Calculate reward points for a specific customer
+* Retrieve reward points for **all customers** in one call
 * Monthly reward point aggregation
 * Total reward point calculation
 * Validation and exception handling
@@ -63,16 +64,41 @@ Total = 90 points
 ## Project Structure
 
 ```text
-src/main/java/org/reward
-
-├── controller
-├── service
-├── repository
-├── entity
-├── dto
-├── exception
-├── util
-└── RewardsApiApplication
+src
+├── main
+│   ├── java
+│   │   └── org.reward
+│   │       ├── config
+│   │       ├── controller
+│   │       ├── dto
+│   │       ├── entity
+│   │       ├── exception
+│   │       ├── repository
+│   │       ├── service
+│   │       │   └── impl
+│   │       ├── util
+│   │       └── RewardsApiApplication
+│   │
+│   └── resources
+│       ├── application.yml
+│       ├── db
+│       │   ├── schema.sql
+│       │   └── data.sql
+│
+└── test
+    └── java
+        └── org.reward
+            ├── controller
+            │   └── RewardControllerTest
+            ├── integration
+            │   └── RewardIntegrationTest
+            ├── repository
+            │   └── TransactionRepositoryTest
+            ├── service
+            │   └── impl
+            │       └── RewardServiceImplTest
+            └── util
+                └── RewardUtilTest
 ```
 
 ---
@@ -85,14 +111,15 @@ The application loads sample data automatically from:
 src/main/resources/data.sql
 ```
 
-Customer:
+Customers:
 
 ```text
 ID   Name
-1    Raj
+1    Sri Raj
+2    Raj
 ```
 
-Sample transactions are inserted for the last three months.
+Sample transactions are inserted for each customer across the last three months.
 
 ---
 
@@ -132,7 +159,7 @@ URL:
 http://localhost:8080/h2-console
 ```
 
-Example Configuration:
+Configuration:
 
 ```text
 JDBC URL : jdbc:h2:mem:testdb
@@ -144,7 +171,7 @@ Password :
 
 ## API Endpoints
 
-### Get Rewards for a Customer
+### Get Rewards for a Specific Customer
 
 ```http
 GET /api/v1/rewards/{customerId}
@@ -156,7 +183,7 @@ Example:
 GET http://localhost:8080/api/v1/rewards/1
 ```
 
-### Sample Response
+Sample Response:
 
 ```json
 {
@@ -168,6 +195,46 @@ GET http://localhost:8080/api/v1/rewards/1
   },
   "totalPoints": 655
 }
+```
+
+---
+
+### Get Rewards for All Customers
+
+```http
+GET /api/v1/rewards/getAllRewards
+```
+
+Returns reward summaries for every customer who has transactions within the configured window (default: last 3 months).
+
+Example:
+
+```http
+GET http://localhost:8080/api/v1/rewards/getAllRewards
+```
+
+Sample Response:
+
+```json
+[
+  {
+    "customerId": 1,
+    "monthlyPoints": {
+      "JUNE": 120,
+      "MARCH": 300,
+      "APRIL": 235
+    },
+    "totalPoints": 655
+  },
+  {
+    "customerId": 2,
+    "monthlyPoints": {
+      "JUNE": 90,
+      "MARCH": 200
+    },
+    "totalPoints": 290
+  }
+]
 ```
 
 ---
@@ -236,20 +303,10 @@ Test coverage includes:
 
 * Spring Boot auto-configuration used for rapid development.
 * Reward calculation logic isolated in `RewardUtil`.
+* `getAllRewards` groups transactions by customer using Java streams and delegates per-customer aggregation to the same `generateRewardResponseDto` helper used by `calculateRewards`, keeping logic DRY.
 * Global exception handling implemented using `@RestControllerAdvice`.
 * Constructor injection used throughout the application.
 * H2 database used for lightweight local execution and testing.
-
----
-
-## Future Enhancements
-
-* Pagination support
-* Swagger/OpenAPI documentation
-* Docker support
-* Authentication and Authorization using Spring Security
-* External database support (MySQL/PostgreSQL)
-* Caching using Redis
 
 ---
 

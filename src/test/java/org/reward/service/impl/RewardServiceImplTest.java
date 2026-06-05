@@ -1,7 +1,6 @@
 package org.reward.service.impl;
 
-
-
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,7 +12,8 @@ import org.reward.entity.Transaction;
 import org.reward.exception.CustomerNotFoundException;
 import org.reward.repository.CustomerRepository;
 import org.reward.repository.TransactionRepository;
-import org.reward.service.impl.RewardServiceImpl;
+import org.reward.util.RewardUtil;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,9 +34,15 @@ class RewardServiceImplTest {
     @Mock
     private TransactionRepository transactionRepository;
 
+    @Mock
+    private RewardUtil rewardUtil;
+
     @InjectMocks
     private RewardServiceImpl rewardService;
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // calculateRewards
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     void calculateRewards_customerDoesNotExist_throwsCustomerNotFoundException() {
@@ -52,7 +58,6 @@ class RewardServiceImplTest {
         verify(customerRepository).findById(absentCustomerId);
         verifyNoInteractions(transactionRepository);
     }
-
 
     @Test
     void calculateRewards_validCustomerNoTransactions_returnsZeroPoints() {
@@ -72,7 +77,6 @@ class RewardServiceImplTest {
         assertTrue(result.getMonthlyPoints().isEmpty());
     }
 
-
     @Test
     void calculateRewards_singleTransactionAtExactly100_earns50Points() {
 
@@ -87,6 +91,7 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(3L), any(), any()))
                 .thenReturn(List.of(hundredDollarTxn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(100))).thenReturn(50);
 
         RewardResponseDto result = rewardService.calculateRewards(3L);
 
@@ -107,10 +112,10 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(4L), any(), any()))
                 .thenReturn(List.of(txn120));
+        when(rewardUtil.calculate(BigDecimal.valueOf(120))).thenReturn(90);
 
         RewardResponseDto result = rewardService.calculateRewards(4L);
 
-        // $51–$100 → 50 pts; $101–$120 → 20 * 2 = 40 pts; total = 90
         assertEquals(90, result.getTotalPoints());
     }
 
@@ -128,12 +133,12 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(5L), any(), any()))
                 .thenReturn(List.of(fiftyDollarTxn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(50))).thenReturn(0);
 
         RewardResponseDto result = rewardService.calculateRewards(5L);
 
         assertEquals(0, result.getTotalPoints());
     }
-
 
     @Test
     void calculateRewards_transactionOf51_earnsOnePoint() {
@@ -149,6 +154,7 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(6L), any(), any()))
                 .thenReturn(List.of(txn51));
+        when(rewardUtil.calculate(BigDecimal.valueOf(51))).thenReturn(1);
 
         RewardResponseDto result = rewardService.calculateRewards(6L);
 
@@ -171,7 +177,7 @@ class RewardServiceImplTest {
         marchTxn2.setCustomer(helen);
 
         Transaction aprilTxn = new Transaction();
-        aprilTxn.setAmount(BigDecimal.valueOf(200));   // 150+100 = 250 pts? → (200-100)*2+50 = 250 pts
+        aprilTxn.setAmount(BigDecimal.valueOf(200));   // 250 pts
         aprilTxn.setTransactionDate(LocalDate.of(2026, 4, 5));
         aprilTxn.setCustomer(helen);
 
@@ -179,21 +185,19 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(7L), any(), any()))
                 .thenReturn(List.of(marchTxn1, marchTxn2, aprilTxn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(120))).thenReturn(90);
+        when(rewardUtil.calculate(BigDecimal.valueOf(80))).thenReturn(30);
+        when(rewardUtil.calculate(BigDecimal.valueOf(200))).thenReturn(250);
 
         RewardResponseDto result = rewardService.calculateRewards(7L);
 
         assertEquals(2, result.getMonthlyPoints().size());
         assertTrue(result.getMonthlyPoints().containsKey("MARCH"));
         assertTrue(result.getMonthlyPoints().containsKey("APRIL"));
-
-        // MARCH: 90 + 30 = 120 pts
         assertEquals(120, result.getMonthlyPoints().get("MARCH"));
-        // APRIL: (200-100)*2 + 50 = 250 pts
         assertEquals(250, result.getMonthlyPoints().get("APRIL"));
-        // Total: 120 + 250 = 370
         assertEquals(370, result.getTotalPoints());
     }
-
 
     @Test
     void calculateRewards_allTransactionsBelowThreshold_zeroTotalPoints() {
@@ -214,12 +218,13 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(8L), any(), any()))
                 .thenReturn(List.of(t1, t2));
+        when(rewardUtil.calculate(BigDecimal.valueOf(20))).thenReturn(0);
+        when(rewardUtil.calculate(BigDecimal.valueOf(35))).thenReturn(0);
 
         RewardResponseDto result = rewardService.calculateRewards(8L);
 
         assertEquals(0, result.getTotalPoints());
     }
-
 
     @Test
     void calculateRewards_highValueTransaction_correctPointsComputed() {
@@ -235,13 +240,12 @@ class RewardServiceImplTest {
         when(transactionRepository.findByCustomerIdAndTransactionDateBetween(
                 eq(9L), any(), any()))
                 .thenReturn(List.of(bigSpend));
+        when(rewardUtil.calculate(BigDecimal.valueOf(250))).thenReturn(350);
 
         RewardResponseDto result = rewardService.calculateRewards(9L);
 
-        // (250 - 100) * 2 + 50 = 300 + 50 = 350
         assertEquals(350, result.getTotalPoints());
     }
-
 
     @Test
     void calculateRewards_verifyRepositoryCalledWithCorrectDateRange() {
@@ -256,6 +260,145 @@ class RewardServiceImplTest {
 
         verify(transactionRepository).findByCustomerIdAndTransactionDateBetween(
                 eq(11L),
+                eq(LocalDate.now().minusMonths(3).withDayOfMonth(1)),
+                eq(LocalDate.now()));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // getAllRewards
+    // ──────────────────────────────────────────────────────────────────────────
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(rewardService, "rewardCalculationMonths", 3L);
+    }
+    @Test
+    void getAllRewards_noTransactionsInWindow_returnsEmptyList() {
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of());
+
+        List<RewardResponseDto> result = rewardService.getAllRewards();
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+        verify(transactionRepository).findByTransactionDateBetween(any(), any());
+    }
+
+    @Test
+    void getAllRewards_twoCustomersWithTransactions_returnsTwoEntries() {
+
+        Customer alice = new Customer(1L, "Alice");
+        Customer bob   = new Customer(2L, "Bob");
+
+        Transaction aliceTxn = new Transaction();
+        aliceTxn.setCustomer(alice);
+        aliceTxn.setAmount(BigDecimal.valueOf(120));
+        aliceTxn.setTransactionDate(LocalDate.now().minusDays(5));
+
+        Transaction bobTxn = new Transaction();
+        bobTxn.setCustomer(bob);
+        bobTxn.setAmount(BigDecimal.valueOf(80));
+        bobTxn.setTransactionDate(LocalDate.now().minusDays(3));
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of(aliceTxn, bobTxn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(120))).thenReturn(90);
+        when(rewardUtil.calculate(BigDecimal.valueOf(80))).thenReturn(30);
+
+        List<RewardResponseDto> result = rewardService.getAllRewards();
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(r -> r.getCustomerId().equals(1L)));
+        assertTrue(result.stream().anyMatch(r -> r.getCustomerId().equals(2L)));
+    }
+
+    @Test
+    void getAllRewards_singleCustomerMultipleTransactions_aggregatedIntoOneEntry() {
+
+        Customer alice = new Customer(1L, "Alice");
+
+        Transaction txn1 = new Transaction();
+        txn1.setCustomer(alice);
+        txn1.setAmount(BigDecimal.valueOf(120));
+        txn1.setTransactionDate(LocalDate.now().minusDays(5));
+
+        Transaction txn2 = new Transaction();
+        txn2.setCustomer(alice);
+        txn2.setAmount(BigDecimal.valueOf(80));
+        txn2.setTransactionDate(LocalDate.now().minusDays(10));
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of(txn1, txn2));
+        when(rewardUtil.calculate(BigDecimal.valueOf(120))).thenReturn(90);
+        when(rewardUtil.calculate(BigDecimal.valueOf(80))).thenReturn(30);
+
+        List<RewardResponseDto> result = rewardService.getAllRewards();
+
+        assertEquals(1, result.size());
+        assertEquals(1L, result.get(0).getCustomerId());
+        assertEquals(120, result.get(0).getTotalPoints());
+    }
+
+    @Test
+    void getAllRewards_customerWithTransactionsInTwoMonths_monthlyPointsGroupedCorrectly() {
+
+        Customer alice = new Customer(1L, "Alice");
+
+        Transaction marchTxn = new Transaction();
+        marchTxn.setCustomer(alice);
+        marchTxn.setAmount(BigDecimal.valueOf(150));
+        marchTxn.setTransactionDate(LocalDate.of(2026, 3, 15));
+
+        Transaction aprilTxn = new Transaction();
+        aprilTxn.setCustomer(alice);
+        aprilTxn.setAmount(BigDecimal.valueOf(200));
+        aprilTxn.setTransactionDate(LocalDate.of(2026, 4, 10));
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of(marchTxn, aprilTxn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(150))).thenReturn(150);
+        when(rewardUtil.calculate(BigDecimal.valueOf(200))).thenReturn(250);
+
+        List<RewardResponseDto> result = rewardService.getAllRewards();
+
+        assertEquals(1, result.size());
+        RewardResponseDto dto = result.get(0);
+        assertEquals(2, dto.getMonthlyPoints().size());
+        assertEquals(150, dto.getMonthlyPoints().get("MARCH"));
+        assertEquals(250, dto.getMonthlyPoints().get("APRIL"));
+        assertEquals(400, dto.getTotalPoints());
+    }
+
+    @Test
+    void getAllRewards_allTransactionsBelowThreshold_totalPointsIsZero() {
+
+        Customer alice = new Customer(1L, "Alice");
+
+        Transaction txn = new Transaction();
+        txn.setCustomer(alice);
+        txn.setAmount(BigDecimal.valueOf(30));
+        txn.setTransactionDate(LocalDate.now().minusDays(5));
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of(txn));
+        when(rewardUtil.calculate(BigDecimal.valueOf(30))).thenReturn(0);
+
+        List<RewardResponseDto> result = rewardService.getAllRewards();
+
+        assertEquals(1, result.size());
+        assertEquals(0, result.get(0).getTotalPoints());
+    }
+
+    @Test
+    void getAllRewards_verifyRepositoryCalledWithCorrectDateWindow() {
+
+        when(transactionRepository.findByTransactionDateBetween(any(), any()))
+                .thenReturn(List.of());
+
+        rewardService.getAllRewards();
+
+        verify(transactionRepository).findByTransactionDateBetween(
                 eq(LocalDate.now().minusMonths(3).withDayOfMonth(1)),
                 eq(LocalDate.now()));
     }

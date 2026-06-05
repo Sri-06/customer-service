@@ -5,13 +5,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.reward.controller.RewardController;
 import org.reward.dto.RewardResponseDto;
 import org.reward.exception.CustomerNotFoundException;
 import org.reward.service.RewardService;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,6 +25,10 @@ class RewardControllerTest {
 
     @InjectMocks
     private RewardController rewardController;
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // getRewards (single customer)
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     void getRewards_multiMonthCustomer_returnsCorrectBreakdown() {
@@ -57,7 +61,6 @@ class RewardControllerTest {
 
         verify(rewardService, times(1)).calculateRewards(targetCustomerId);
     }
-
 
     @Test
     void getRewards_customerWithNoEarnedPoints_returnsTotalPointsAsZero() {
@@ -134,5 +137,107 @@ class RewardControllerTest {
 
         verify(rewardService, times(1)).calculateRewards(regularCustomerId);
         verifyNoMoreInteractions(rewardService);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // getAllRewards
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void getAllRewards_multipleCustomers_returns200WithList() {
+
+        RewardResponseDto customer1Dto = new RewardResponseDto(1L, Map.of("JANUARY", 90), 90);
+        RewardResponseDto customer2Dto = new RewardResponseDto(2L, Map.of("JANUARY", 150, "FEBRUARY", 60), 210);
+
+        when(rewardService.getAllRewards()).thenReturn(List.of(customer1Dto, customer2Dto));
+
+        ResponseEntity<List<RewardResponseDto>> result = rewardController.getAllRewards();
+
+        assertNotNull(result);
+        assertEquals(200, result.getStatusCode().value());
+        assertNotNull(result.getBody());
+        assertEquals(2, result.getBody().size());
+
+        verify(rewardService, times(1)).getAllRewards();
+    }
+
+    @Test
+    void getAllRewards_noCustomersWithTransactions_returns200WithEmptyList() {
+
+        when(rewardService.getAllRewards()).thenReturn(Collections.emptyList());
+
+        ResponseEntity<List<RewardResponseDto>> result = rewardController.getAllRewards();
+
+        assertNotNull(result);
+        assertEquals(200, result.getStatusCode().value());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().isEmpty());
+
+        verify(rewardService, times(1)).getAllRewards();
+    }
+
+    @Test
+    void getAllRewards_singleCustomer_returnsListWithOneEntry() {
+
+        RewardResponseDto singleDto = new RewardResponseDto(1L, Map.of("MARCH", 300), 300);
+
+        when(rewardService.getAllRewards()).thenReturn(List.of(singleDto));
+
+        ResponseEntity<List<RewardResponseDto>> result = rewardController.getAllRewards();
+
+        assertNotNull(result);
+        assertEquals(200, result.getStatusCode().value());
+        assertEquals(1, result.getBody().size());
+        assertEquals(1L, result.getBody().get(0).getCustomerId());
+        assertEquals(300, result.getBody().get(0).getTotalPoints());
+
+        verify(rewardService, times(1)).getAllRewards();
+    }
+
+    @Test
+    void getAllRewards_verifyCorrectCustomerIdsInResponse() {
+
+        RewardResponseDto dto1 = new RewardResponseDto(10L, Map.of("APRIL", 100), 100);
+        RewardResponseDto dto2 = new RewardResponseDto(20L, Map.of("APRIL", 200), 200);
+        RewardResponseDto dto3 = new RewardResponseDto(30L, Map.of("APRIL", 50), 50);
+
+        when(rewardService.getAllRewards()).thenReturn(List.of(dto1, dto2, dto3));
+
+        ResponseEntity<List<RewardResponseDto>> result = rewardController.getAllRewards();
+
+        assertNotNull(result.getBody());
+        assertEquals(3, result.getBody().size());
+        assertTrue(result.getBody().stream().anyMatch(r -> r.getCustomerId().equals(10L)));
+        assertTrue(result.getBody().stream().anyMatch(r -> r.getCustomerId().equals(20L)));
+        assertTrue(result.getBody().stream().anyMatch(r -> r.getCustomerId().equals(30L)));
+
+        verify(rewardService, times(1)).getAllRewards();
+    }
+
+    @Test
+    void getAllRewards_verifyServiceInvokedOnce_noExtraInteractions() {
+
+        when(rewardService.getAllRewards()).thenReturn(Collections.emptyList());
+
+        rewardController.getAllRewards();
+
+        verify(rewardService, times(1)).getAllRewards();
+        verifyNoMoreInteractions(rewardService);
+    }
+
+    @Test
+    void getAllRewards_eachResponseContainsTotalPoints() {
+
+        RewardResponseDto dto1 = new RewardResponseDto(1L, Map.of("MAY", 90, "JUNE", 50), 140);
+        RewardResponseDto dto2 = new RewardResponseDto(2L, Map.of("MAY", 0), 0);
+
+        when(rewardService.getAllRewards()).thenReturn(List.of(dto1, dto2));
+
+        ResponseEntity<List<RewardResponseDto>> result = rewardController.getAllRewards();
+
+        assertNotNull(result.getBody());
+        result.getBody().forEach(r -> assertNotNull(r.getTotalPoints()));
+
+        verify(rewardService, times(1)).getAllRewards();
     }
 }

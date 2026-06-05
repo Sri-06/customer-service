@@ -1,12 +1,12 @@
 package org.reward.util;
 
-import lombok.NoArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 
-@NoArgsConstructor
+@Component
 public class RewardUtil {
-    public static int calculate(BigDecimal amount) {
+    public int calculate(BigDecimal amount) {
 
         if (amount == null || amount.compareTo(BigDecimal.valueOf(50)) <= 0) {
             return 0;

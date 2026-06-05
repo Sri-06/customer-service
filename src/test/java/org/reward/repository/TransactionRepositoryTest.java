@@ -31,6 +31,9 @@ class TransactionRepositoryTest {
         savedCustomer = customerRepository.save(alice);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // findByCustomerIdAndTransactionDateBetween
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     void findByCustomerIdAndTransactionDateBetween_transactionWithinWindow_returnsResult() {
@@ -53,7 +56,6 @@ class TransactionRepositoryTest {
         assertEquals(0, found.get(0).getAmount().compareTo(BigDecimal.valueOf(75.00)));
     }
 
-
     @Test
     void findByCustomerIdAndTransactionDateBetween_multipleTransactionsInWindow_returnsAll() {
 
@@ -74,7 +76,6 @@ class TransactionRepositoryTest {
 
         assertEquals(3, found.size());
     }
-
 
     @Test
     void findByCustomerIdAndTransactionDateBetween_transactionOnStartBoundary_isIncluded() {
@@ -115,7 +116,6 @@ class TransactionRepositoryTest {
         assertFalse(found.isEmpty());
         assertTrue(found.stream().anyMatch(t -> t.getTransactionDate().equals(windowEnd)));
     }
-
 
     @Test
     void findByCustomerIdAndTransactionDateBetween_noTransactionsForCustomer_returnsEmpty() {
@@ -161,7 +161,6 @@ class TransactionRepositoryTest {
         assertTrue(found.isEmpty());
     }
 
-
     @Test
     void findByCustomerIdAndTransactionDateBetween_transactionsOfOtherCustomer_notReturned() {
 
@@ -182,5 +181,121 @@ class TransactionRepositoryTest {
                         LocalDate.now());
 
         assertTrue(found.isEmpty());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // findByTransactionDateBetween  (used by getAllRewards)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void findByTransactionDateBetween_transactionWithinWindow_returnsResult() {
+
+        Transaction txn = new Transaction();
+        txn.setCustomer(savedCustomer);
+        txn.setAmount(BigDecimal.valueOf(120));
+        txn.setTransactionDate(LocalDate.now().minusDays(5));
+        transactionRepository.save(txn);
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(
+                        LocalDate.now().minusMonths(1),
+                        LocalDate.now());
+
+        assertFalse(found.isEmpty());
+        assertEquals(1, found.size());
+    }
+
+    @Test
+    void findByTransactionDateBetween_noTransactionsInWindow_returnsEmpty() {
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(
+                        LocalDate.now().minusMonths(1),
+                        LocalDate.now());
+
+        assertTrue(found.isEmpty());
+    }
+
+    @Test
+    void findByTransactionDateBetween_transactionBeforeWindow_notReturned() {
+
+        Transaction oldTxn = new Transaction();
+        oldTxn.setCustomer(savedCustomer);
+        oldTxn.setAmount(BigDecimal.valueOf(200));
+        oldTxn.setTransactionDate(LocalDate.now().minusMonths(5));
+        transactionRepository.save(oldTxn);
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(
+                        LocalDate.now().minusMonths(3),
+                        LocalDate.now());
+
+        assertTrue(found.isEmpty());
+    }
+
+    @Test
+    void findByTransactionDateBetween_transactionsAcrossMultipleCustomers_allReturned() {
+
+        Customer bob = new Customer();
+        bob.setName("Bob");
+        Customer savedBob = customerRepository.save(bob);
+
+        Transaction aliceTxn = new Transaction();
+        aliceTxn.setCustomer(savedCustomer);
+        aliceTxn.setAmount(BigDecimal.valueOf(150));
+        aliceTxn.setTransactionDate(LocalDate.now().minusDays(10));
+        transactionRepository.save(aliceTxn);
+
+        Transaction bobTxn = new Transaction();
+        bobTxn.setCustomer(savedBob);
+        bobTxn.setAmount(BigDecimal.valueOf(80));
+        bobTxn.setTransactionDate(LocalDate.now().minusDays(7));
+        transactionRepository.save(bobTxn);
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(
+                        LocalDate.now().minusMonths(1),
+                        LocalDate.now());
+
+        assertEquals(2, found.size());
+        assertTrue(found.stream().anyMatch(t -> t.getCustomer().getId().equals(savedCustomer.getId())));
+        assertTrue(found.stream().anyMatch(t -> t.getCustomer().getId().equals(savedBob.getId())));
+    }
+
+    @Test
+    void findByTransactionDateBetween_startBoundaryInclusive_transactionReturned() {
+
+        LocalDate start = LocalDate.now().minusMonths(3).withDayOfMonth(1);
+
+        Transaction txn = new Transaction();
+        txn.setCustomer(savedCustomer);
+        txn.setAmount(BigDecimal.valueOf(90));
+        txn.setTransactionDate(start);
+        transactionRepository.save(txn);
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(start, LocalDate.now());
+
+        assertFalse(found.isEmpty());
+        assertTrue(found.stream().anyMatch(t -> t.getTransactionDate().equals(start)));
+    }
+
+    @Test
+    void findByTransactionDateBetween_endBoundaryInclusive_transactionReturned() {
+
+        LocalDate end = LocalDate.now();
+
+        Transaction txn = new Transaction();
+        txn.setCustomer(savedCustomer);
+        txn.setAmount(BigDecimal.valueOf(130));
+        txn.setTransactionDate(end);
+        transactionRepository.save(txn);
+
+        List<Transaction> found =
+                transactionRepository.findByTransactionDateBetween(
+                        LocalDate.now().minusMonths(1), end);
+
+        assertFalse(found.isEmpty());
+        assertTrue(found.stream().anyMatch(t -> t.getTransactionDate().equals(end)));
     }
 }
