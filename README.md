@@ -82,7 +82,6 @@ src
 │   └── resources
 │       ├── application.yml
 │       ├── db
-│       │   ├── schema.sql
 │       │   └── data.sql
 │
 └── test
